@@ -1,0 +1,164 @@
+import pandas as pd
+import numpy as np
+# import xgboost as xgb
+import random
+
+def gini(list_of_values):
+  sorted_list = sorted(list(list_of_values))
+  height, area = 0, 0
+  for value in sorted_list:
+    height += value
+    area += height - value / 2.
+  fair_area = height * len(list_of_values) / 2
+  return (fair_area - area) / fair_area
+
+def normalized_gini(y_pred, y):
+    normalized_gini = gini(y_pred)/gini(y)
+    return normalized_gini
+
+def evalerror(preds, dtrain):
+    labels = dtrain.get_label()
+    lab = np.mean(np.absolute(preds-labels))
+    return 'lab', lab
+
+
+train = pd.read_csv('../data/sh600000.csv')
+
+# prepare data
+train.columns = ['ID','Name','Date','Industry','Concept','Region','Open','High','Low','Close',
+                 'AfterAdj','BefAdj','Range','Volumn','Turnover','TurnoverRate','MarketCap',
+                 'TotalCap','IsLimitUp','IsLimitDown','PE','PS','PCF','PB','MA_5','MA_10',
+                 'MA_20','MA_30','MA_60','MA_crossover','MACD_DIF','MACD_DEA','MACD_MACD',
+                 'MACD_crossover','KDJ_K','KDJ_D','KDJ_J','KDJ_crossover','Bollinger_mid',
+                 'Bollinger_up','Bollinger_down','psy','psyma','rsi1','rsi2','rsi3','amplitude']
+train = train.iloc[::-1]
+train.reset_index(inplace=True)
+from datetime import datetime
+Date = [datetime.strptime(x, '%Y-%m-%d') for x in train['Date']]
+train['Year'] = [x.year for x in Date]
+train['Month'] = [x.month for x in Date]
+train['Day'] = [x.day for x in Date]
+train['DATE'] = Date
+
+SIZE = train.shape
+
+# now calcualte some factors
+# price mom and reversal
+# Tot Ret 1D
+TMP = train.ix[1:,'Close'].values/train.ix[0:SIZE[0]-2,'Close'].values-1
+train['PriceMoMRev_TotRet1D'] = np.concatenate(([0],TMP))
+TMP = train.ix[1:,'AfterAdj'].values/train.ix[0:SIZE[0]-2,'AfterAdj'].values-1
+train['PriceMoMRev_TotRet1D'] = np.concatenate(([0],TMP))
+# Tot Ret 5D
+TMP = train.ix[5:,'Close'].values/train.ix[0:SIZE[0]-6,'Close'].values-1
+train['PriceMoMRev_TotRet5D'] = np.concatenate(([0]*5,TMP))
+TMP = train.ix[5:,'AfterAdj'].values/train.ix[0:SIZE[0]-6,'AfterAdj'].values-1
+train['PriceMoMRev_TotRet5D'] = np.concatenate(([0]*5,TMP))
+# Tot Ret 21D(1M)
+TMP = train.ix[21:,'Close'].values/train.ix[0:SIZE[0]-22,'Close'].values-1
+train['PriceMoMRev_TotRet21D'] = np.concatenate(([0]*21,TMP))
+TMP = train.ix[21:,'AfterAdj'].values/train.ix[0:SIZE[0]-22,'AfterAdj'].values-1
+train['PriceMoMRev_TotRet21D'] = np.concatenate(([0]*21,TMP))
+# Tot Ret 252D(12M)
+TMP = train.ix[252:,'Close'].values/train.ix[0:SIZE[0]-253,'Close'].values-1
+train['PriceMoMRev_TotRet252D'] = np.concatenate(([0]*252,TMP))
+TMP = train.ix[252:,'AfterAdj'].values/train.ix[0:SIZE[0]-253,'AfterAdj'].values-1
+train['PriceMoMRev_TotRet252D'] = np.concatenate(([0]*252,TMP))
+# 12M-1M
+train['PriceMoMRev_TotRet12M-1M'] = train['PriceMoMRev_TotRet252D'] - train['PriceMoMRev_TotRet21D']
+# Tot Ret 1260D(60M)
+TMP = train.ix[1260:,'Close'].values/train.ix[0:SIZE[0]-1261,'Close'].values-1
+train['PriceMoMRev_TotRet1260D'] = np.concatenate(([0]*1260,TMP))
+TMP = train.ix[1260:,'AfterAdj'].values/train.ix[0:SIZE[0]-1261,'AfterAdj'].values-1
+train['PriceMoMRev_TotRet1260D'] = np.concatenate(([0]*1260,TMP))
+# Maximum daily return in last 1M (lottery factor)
+TMP = pd.rolling_max(train['PriceMoMRev_TotRet1D'],21)
+train['PriceMoMRev_Lottery'] = TMP
+# 21D volatility of volume/price Descending
+TMP = pd.rolling_std(train['Volumn'],21)
+train['PriceMoMRev_vol_volume21D'] = TMP
+# Price-to-52 week high Ascending
+TMP = pd.rolling_max(train['Close'],252)
+train['PriceMoMRev_Price-to-52 week high'] = train['Close']/TMP
+TMP = pd.rolling_max(train['AfterAdj'],252)
+train['PriceMoMRev_Price-to-52 week high'] = train['AfterAdj']/TMP
+
+train.shape
+
+
+# technicals
+# Realized vol, 1Y daily Descending
+TMP = pd.rolling_std(train['PriceMoMRev_TotRet1D'],252)
+train['Tech_Realized vol, 1Y'] = TMP
+# Skewness, 1Y daily Descending
+TMP = pd.rolling_skew(train['PriceMoMRev_TotRet1D'],252)
+train['Tech_Skewness, 1Y'] = TMP
+# Moving average crossover, 15W-36W Ascending
+TMP = pd.rolling_mean(train['Close'],75)
+TMP1 = pd.rolling_mean(train['Close'],180)
+train['Tech_MAcrossover, 15W-36W, 1Y'] = TMP-TMP1
+# Normalized abnormal volume Ascending
+# CAPM beta, 5Y monthly Descending
+train1 = pd.read_csv('../data/SSE.csv')
+train1 = train1.iloc[::-1]
+train1.reset_index(inplace=True)
+Date1 = [datetime.strptime(x, '%Y-%m-%d') for x in train1['Date']]
+train1['DATE'] = Date1
+SIZE1 = train1.shape
+TMP = train1.ix[1:,'Close'].values/train1.ix[0:SIZE1[0]-2,'Close'].values-1
+train1['TotRet1D'] = np.concatenate(([0],TMP))
+TMP = train1.ix[21:,'Close'].values/train1.ix[0:SIZE1[0]-22,'Close'].values-1
+train1['TotRet21D'] = np.concatenate(([0]*21,TMP))
+T1 = train[['DATE','PriceMoMRev_TotRet1D','PriceMoMRev_TotRet21D']]
+XX = T1.merge(train1,left_on='DATE', right_on='DATE', how='left')
+TMP = pd.rolling_cov(XX['PriceMoMRev_TotRet21D'],XX['TotRet21D'], window=1260, pairwise=True, min_periods=1200)
+TMP1 = pd.rolling_var(XX['TotRet21D'], 1260, min_periods=1200)
+train['Tech_CAPM_beta, 5Y monthly'] = TMP/TMP1
+# CAPM idosyncratic vol, 1Y daily Descending
+TMP = XX['PriceMoMRev_TotRet21D'] - train['Tech_CAPM_beta, 5Y monthly']*XX['TotRet21D']
+train['Tech_CAPM_idosyncratic_vol, 1Y daily'] = pd.rolling_std(TMP, 252, min_periods=200)
+# Kurtosis, 1Y daily Descending
+TMP = pd.rolling_kurt(train['PriceMoMRev_TotRet1D'],252)
+train['Tech_Kurtosis, 1Y'] = TMP
+# Idiosyncratic vol surprise Descending
+# Float turnover, 12M Descending the number of times a stock trades the number of shares of its float
+TMP = pd.rolling_sum(train['Turnover'],252)
+TMP1 = pd.rolling_sum(train['MarketCap'],252)
+train['Tech_FloatTurnover, 12M'] = TMP/TMP1
+# Log float-adj capitalization Ascending
+train['Tech_Log capitalization'] = np.log(train['MarketCap'])
+# EPS growth
+train['eps'] = train['Close']/train['PE']
+TMP = train.ix[252:,'eps'].values/train.ix[0:SIZE[0]-253,'eps'].values-1
+train['Growth_EPSGrowth'] = np.concatenate(([0]*252,TMP))
+
+
+train.shape
+
+# import matplotlib.pyplot as plt
+# plt.interactive(False)
+# plt.plot(Date,train['CAPM_beta, 5Y monthly'], 'ro')
+# plt.show()
+#
+# plt.plot(Date,train['Kurtosis, 1Y'], 'ro')
+# plt.show()
+#
+# plt.plot(Date,train['Log capitalization'], 'ro')
+# plt.show()
+#
+# plt.plot(Date,train['Close'], 'ro')
+# plt.show()
+
+
+train.shape
+
+All_Technical = {}
+All_Technical['600000'] = train
+
+import pickle
+with open('All_Technical.pickle', 'wb') as handle:
+  pickle.dump(All_Technical, handle)
+
+with open('All_Technical.pickle', 'rb') as handle:
+  b = pickle.load(handle)
+print All_Technical['600000'] == b['600000']
