@@ -1,0 +1,33 @@
+import pickle
+import pandas as pd
+with open('All_Combine.pickle', 'rb') as handle:
+  All_Combine = pickle.load(handle)
+Data = All_Combine['600000']
+
+
+VariableList = ['Quality_RoE', 'Quality_RoC', 'Quality_RoA',
+       'Quality_AssetTurnover', 'Quality_Gross margin',
+       'Quality_EBITDA margin', 'Quality_Berry Ratio',
+       'Quality_Current ratio', 'Quality_Long-term debt / equity',
+       'Quality_Operating Profit margin',
+       'PriceMoMRev_TotRet1D', 'PriceMoMRev_TotRet5D',
+       'PriceMoMRev_TotRet21D', 'PriceMoMRev_TotRet252D',
+       'PriceMoMRev_TotRet12M-1M', 'PriceMoMRev_TotRet1260D',
+       'PriceMoMRev_Lottery', 'PriceMoMRev_vol_volume21D',
+       'PriceMoMRev_Price-to-52 week high', 'Tech_Realized vol, 1Y',
+       'Tech_Skewness, 1Y', 'Tech_MAcrossover, 15W-36W, 1Y',
+       'Tech_CAPM_beta, 5Y monthly',
+       'Tech_CAPM_idosyncratic_vol, 1Y daily', 'Tech_Kurtosis, 1Y',
+       'Tech_FloatTurnover, 12M', 'Tech_Log capitalization',
+       'Growth_EPSGrowth', 'Value_EBITDA/EV',
+       'Value_Sales/EV', 'Value_PE', 'Value_PS', 'Value_PCF', 'Value_PB', 'Quality_ZScore']
+Var = Data[VariableList]
+Target = Data['target_monthly']
+
+
+Var.corrwith(Target)
+
+
+
+print Data.shape
+
