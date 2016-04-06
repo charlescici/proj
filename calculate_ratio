@@ -1,0 +1,69 @@
+import pandas as pd
+import xlrd
+
+xls = xlrd.open_workbook(r'C:\project\kag\Terry\data\data.xlsx', on_demand=True)
+SheetName = xls.sheet_names()
+
+All_financial = {}
+for x in range(0, 50):
+    INPUT = pd.read_excel('C:\project\kag\Terry\data\data.xlsx',sheetname = x)
+    INPUT = INPUT.transpose()
+
+    # p&l statements are YTD, change to quarterly
+    for j in range(10,0,-1):
+        if j % 4 != 0:
+            INPUT.iloc[j,12:20] = INPUT.iloc[j,12:20] - INPUT.iloc[j-1,12:20]
+    # print INPUT
+
+    INPUT1 = INPUT.copy()
+    # convert p&l items to trailing 12M
+    for j in range(0,11):
+        if j >= 3:
+            INPUT1.iloc[j,12:20] = INPUT.iloc[j-3:j+1,12:20].sum(axis=0)
+        else:
+            INPUT1.iloc[j,12:20] = INPUT.iloc[0:j+1,12:20].sum(axis=0)*4/(j+1.0)
+    # print INPUT1
+
+    # calculate ratio
+    # 1 Return on Equity = Net Income / Equity Ascending
+    R1 = INPUT['Net Income']/INPUT['Equity']
+    INPUT['Quality_RoE'] = R1
+    # 2 Return on Capital Employed = EBIT / (Capital Employed = TA-CL) Ascending
+    R2 = INPUT['Operating Profit (EBIT)']/(INPUT['Total Assets'] - INPUT['current liability'])
+    INPUT['Quality_RoC'] = R2
+    # 3 Return on Assets = Net Income / TA Ascending
+    R3 = INPUT['Net Income']/INPUT['Total Assets']
+    INPUT['Quality_RoA'] = R3
+    #4 Asset Turnover = Sales / TA Ascending Ascending
+    R4 = INPUT['Sales']/INPUT['Total Assets']
+    INPUT['Quality_AssetTurnover'] = R4
+    #5 Gross margin = (Revenue - COGS) / Revenue Ascending
+    R5 = (INPUT['Sales'] - INPUT['COGS'])/INPUT['Sales']
+    INPUT['Quality_Gross margin'] = R5
+    #6 EBITDA margin = EBITDA / Revenue Ascending
+    R6 = INPUT['EBITDA ']/INPUT['Sales']
+    INPUT['Quality_EBITDA margin'] = R6
+    #7 Berry Ratio = gross margin / operating expense Ascending
+    R7 = (INPUT['Sales'] - INPUT['COGS'])/INPUT['Operating Cost']
+    INPUT['Quality_Berry Ratio'] = R7
+    #8 Current ratio = Current Assets / Current Liability Descending
+    R8 = INPUT['Current Assets']/INPUT['current liability']
+    INPUT['Quality_Current ratio'] = R8
+    #9 Long-term debt / equity Ascending
+    R9 = INPUT['Long-term debt']/INPUT['Equity']
+    INPUT['Quality_Long-term debt / equity'] = R9
+    #10 was Capex to Dep but replaced by CF / CaPex as depreciation is not good
+    #R10 = INPUT['Long-term debt']/INPUT['depreciation']
+    #10 Operating Profit margin = Operating Profit / Sales
+    R10 = INPUT['Operating Profit (EBIT)']/INPUT['Sales']
+    INPUT['Quality_Operating Profit margin'] = R10
+    All_financial[SheetName[x]] = INPUT
+
+import pickle
+with open('All_financial.pickle', 'wb') as handle:
+  pickle.dump(All_financial, handle)
+
+with open('All_financial.pickle', 'rb') as handle:
+  b = pickle.load(handle)
+
+print All_financial['600000'] == b['600000']
