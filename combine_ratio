@@ -1,0 +1,51 @@
+import numpy as np
+import pandas as pd
+import pickle
+with open('All_Technical.pickle', 'rb') as handle:
+  All_Technical = pickle.load(handle)
+
+with open('All_financial.pickle', 'rb') as handle:
+  All_financial = pickle.load(handle)
+
+print All_financial['600000'].shape
+print All_Technical['600000'].shape
+
+# combine together.
+Tech = All_Technical['600000']
+Fin = All_financial['600000']
+
+rs1 = Tech.set_index('DATE').resample(rule='1M',how='last',closed='left')
+rs2 = Fin.resample(rule='1M',how='last',closed='left') # for some reason it is already lagged one month
+TMP = rs1['PriceMoMRev_TotRet21D'][1:]
+rs1['target_monthly'] = np.concatenate((TMP,[0]))
+rs2 = rs2.fillna(method='ffill')
+
+Combine = rs2.join(rs1,how='left')
+
+# calculate factors that combine both tech and fin
+# EV =  Market Capitalization + Total Debt - Cash
+EV = Combine['MarketCap'] + Combine['debt outstanding'] - Combine['Cash ']
+# EBITDA to EV
+Combine['Value_EBITDA/EV'] = Combine['EBITDA ']/EV
+# Sales to EV
+Combine['Value_Sales/EV'] = Combine['Sales']/EV
+# rename PE PS PB PCF
+Combine[['Value_PE','Value_PS','Value_PCF','Value_PB']] = Combine[['PE', 'PS', 'PCF', 'PB']]
+# Z score = 1.2CA-CL/TA + 1.4RE/TA + 3.3EBIT/TA + 0.6MVE/TL + 1Sales/TA
+R2 = Combine['EPS'] / Combine['Total Assets']
+R3 = Combine['Operating Profit (EBIT)'] / Combine['Total Assets']
+R4 = Combine['TotalCap'] / Combine['Total Debt']
+R5 = Combine['Sales'] / Combine['Total Assets']
+Combine['Quality_ZScore'] = 1.2*Combine['Quality_Current ratio']+1.4*R2+3.3*R3+0.6*R4+1*R5
+
+
+All_Combine = {}
+All_Combine['600000'] = Combine
+
+import pickle
+with open('All_Combine.pickle', 'wb') as handle:
+  pickle.dump(All_Combine, handle)
+
+with open('All_Combine.pickle', 'rb') as handle:
+  b = pickle.load(handle)
+print All_Combine['600000'] == b['600000']
