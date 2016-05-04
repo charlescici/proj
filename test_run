@@ -1,4 +1,3 @@
-__author__ = 'huangy'
 
 # import pickle
 import pandas as pd
