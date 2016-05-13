@@ -130,7 +130,7 @@ Target.fillna(0,inplace=True)
 MCap.fillna(0,inplace=True)
 
 # use LASSO and BIC for Var Selection
-from sklearn.linear_model import Lasso, LassoCV, LassoLarsIC
+from sklearn.linear_model import Lasso, LassoCV, LassoLarsIC, LassoLarsCV, LassoLars,lasso_path, ElasticNetCV, ElasticNet
 X = AllNormVar
 Y = np.asarray(Target.ix[0:21,].as_matrix()).flatten()
 
@@ -155,9 +155,9 @@ Var2 = [val for (idx, val) in enumerate(VariableList) if np.abs(model1.coef_[idx
 Var3 = [val for (idx, val) in enumerate(Perform.index) if np.abs(Perform.ix[val,'IC'])>0.02]
 
 from sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor, GradientBoostingRegressor, ExtraTreesClassifier
-from sklearn.svm import SVR, NuSVR
+from sklearn.svm import SVR, NuSVR, NuSVC
 from sklearn.grid_search import GridSearchCV, ParameterGrid
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_squared_error,log_loss
 from sklearn import cross_validation
 
 # make forecast one month ahead and update model
@@ -193,6 +193,14 @@ SVMParam = [{'kernel': 'rbf', 'C': 0.0001, 'nu': 0.94000000000000006, 'gamma': 0
 {'kernel': 'rbf', 'C': 0.01, 'nu': 0.9900000000000001, 'gamma': 0.001},
 {'kernel': 'sigmoid', 'C': 0.001, 'nu': 0.9900000000000001, 'gamma': 0.1}]
 
+SVMParam1 = [{'kernel': 'linear', 'nu': 0.050000000000000003, 'gamma': 0.0012589254117941675},
+{'kernel': 'linear', 'nu': 0.050000000000000003, 'gamma': 0.31622776601683955},
+{'kernel': 'linear', 'nu': 0.050000000000000003, 'gamma': 0.79432823472428615},
+{'kernel': 'linear', 'nu': 0.050000000000000003, 'gamma': 0.0039810717055349778},
+{'kernel': 'linear', 'nu': 0.050000000000000003, 'gamma': 0.39810717055349937},
+{'kernel': 'sigmoid', 'nu': 0.050000000000000003, 'gamma': 0.015848931924611172},
+{'kernel': 'linear', 'nu': 0.050000000000000003, 'gamma': 0.002511886431509582}]
+
 for rowID in range(21,31):
   # rank and norminv transform
   AllNormVar = pd.DataFrame()
@@ -211,6 +219,18 @@ for rowID in range(21,31):
   PredY0 = model1.predict(X)
   PredY = model1.predict(AllNormVarTest)
   BstPara = 0
+
+
+  # model_cv = LassoCV(cv=5,alphas=model_bic.alphas_,random_state=0).fit(X,Y)
+  # model1 = Lasso(alpha=model_cv.alpha_).fit(X,Y)
+  # PredY0 = model1.predict(X)
+  # PredY = model1.predict(AllNormVarTest)
+  # BstPara = 0
+
+  # model_cv = ElasticNetCV(l1_ratio=[.1, .5, .7, .9, .95, .99, 1],cv=5,random_state=0).fit(X,Y)
+  # PredY0 = model_cv.predict(X)
+  # PredY = model_cv.predict(AllNormVarTest)
+  # BstPara = 0
 
   # ExtraTreeRegressor
   # parameters = list(ParameterGrid({'max_features': ('auto', 'log2'), 'max_depth': [1, 2, 3, 4, 5, 10, 20, 50, None]}))
@@ -339,28 +359,75 @@ for rowID in range(21,31):
   Index = PredY.tolist().index(np.nanmax(PredY))
   Weight.ix[rowID-21,Index] = 1
 
-  #  #### classification of top 1/3 bot 1/3
-  # Index = np.argsort(Y)
-  # N = int(len(Index) * 0.3)
-  # Y1 = np.zeros((len(Y),1))
-  # Y1[Index[:N]] = -1
-  # Y1[Index[-N:]] = 1
-  #
-  # clf = ExtraTreesClassifier(random_state=0)
-  # clf.fit(X,Y1)
-  # PredY0 = clf.predict(X)
-  # PredY = clf.predict(AllNormVarTest)
-  #
-  # Weight.ix[rowID-21,] = PredY
-  # # no short sell
-  # # clmID = Weight.ix[rowID-21,]<0
-  # # Weight.ix[rowID - 21,clmID] = 0
+  #  #### classification of return > 10%
+  Y1Mat = np.zeros(Target.ix[0:rowID,].shape)
+  for ITER in range(0,rowID):
+    # HThresh = np.percentile(Target.ix[ITER,], 90)
+    # HThresh = np.percentile(Target.ix[ITER,], 95)
+    # Y1Mat[ITER,Target.ix[ITER,]>=HThresh] = 1
+    Y1Mat[ITER,] = ss.rankdata(Target.ix[ITER,],method='min')
+  Y1 = Y1Mat.flatten()
+  from sklearn import preprocessing
+  min_max_scaler = preprocessing.MinMaxScaler(feature_range=(-1, 1))
+  X_train_minmax = min_max_scaler.fit_transform(X)
+  X_test_minmax = min_max_scaler.transform(AllNormVarTest)
+  # parameters = list(ParameterGrid({'nu': np.arange(0.001,0.08,0.001), 'kernel': ('rbf', 'linear','sigmoid'),
+  #                                  'gamma': [10**ii for ii in np.arange(-3,0,0.1)]}))
+  parameters = list(ParameterGrid({'nu': np.arange(0.05,0.95,0.05), 'kernel': ('rbf', 'linear','sigmoid'),
+                                   'gamma': [10**ii for ii in np.arange(-3,0,0.1)]}))
+  # parameters = list(ParameterGrid({'epsilon': [10**ii for ii in range(-4,4)], 'kernel': ('rbf', 'linear','sigmoid'),
+  #                                  'C': [10**ii for ii in range(-4,4)], 'gamma': [10**ii for ii in range(-4,4)]}))
+  k_fold = cross_validation.StratifiedKFold(Y1, n_folds=5, random_state=4)
+  BstPara = None
+  BstScore = 1e5
+  try:
+    for para in parameters:
+        Score = 0
+        for train_indices, test_indices in k_fold:
+            TrX = X_train_minmax[train_indices,]; TrY = Y1[train_indices]
+            TeX = X_train_minmax[test_indices,]; TeY = Y1[test_indices]
+            # clf1 = SVR(epsilon=para['epsilon'],kernel=para['kernel'],C=para['C'],gamma=para['gamma'])
+            clf1 = NuSVC(nu=para['nu'],kernel=para['kernel'],probability=True,gamma=para['gamma'],cache_size=8000)
+            weight = np.ones(TrY.shape)*sum(TrY)/len(TrY); weight[TrY==1]=(len(TrY)-sum(TrY))/len(TrY)
+            # clf1.fit(TrX,TrY,sample_weight=weight)
+            clf1.fit(TrX,TrY)
+            PeY = clf1.predict_proba(TeX)
+            Score += log_loss(TeY,PeY)
+        if Score < BstScore:
+            BstScore = Score
+            BstPara = para
+  except:
+    print para
+  # BstPara = SVMParam1[rowID-21]
+  # clf = SVC(epsilon=BstPara['epsilon'],kernel=BstPara['kernel'],probability=True,gamma=BstPara['gamma'])
+  clf = NuSVC(nu=BstPara['nu'],kernel=BstPara['kernel'],probability=True,gamma=BstPara['gamma'],cache_size=8000)
+  weight = np.ones(Y1.shape)*sum(Y1); weight[Y1==1]=len(Y1)-sum(Y1)
+  # clf.fit(X_train_minmax,Y1,sample_weight=weight)
+  clf.fit(X_train_minmax,Y1)
+  PredY0 = clf.predict_proba(X_train_minmax);PredY0=PredY0[:,-1]
+  PredY = clf.predict_proba(X_test_minmax);PredY=PredY[:,-1]
+
+
+  Weight.ix[rowID-21,] = 0
+  # only invest in the best
+  Index = PredY.tolist().index(np.nanmax(PredY))
+  Weight.ix[rowID-21,Index] = 1
+  # # invest in top 5
+  # Weight.ix[rowID-21,] = 0
+  # HThresh = np.percentile(PredY, 95)
+  # Weight.ix[rowID-21,PredY >= HThresh] = 1
+  # print sum(Weight.ix[rowID-21,])
+
+
+  # #### ranking algorithm
 
 
   Weight.ix[rowID-21,Price.ix[rowID,].isnull()] = 0
   Adj = LevLimit*Capital.ix[rowID-21]/sum(abs(Price.ix[rowID,].fillna(0))*abs(Weight.ix[rowID-21,]))
   Weight.ix[rowID-21,] = Weight.ix[rowID-21,]*Adj
   PnL.ix[rowID-21] = np.nansum(Weight.ix[rowID-21,]*Target.ix[rowID,]*Price.ix[rowID,])
+  if len(set(PredY)) < 2:
+    PnL.ix[rowID-21] = 0
   Ret.ix[rowID-21] = PnL.ix[rowID-21]/Capital.ix[rowID-21,]
   Capital.ix[rowID-20] = Capital.ix[rowID-21] + PnL.ix[rowID-21]
 
