@@ -1,0 +1,95 @@
+Var = Data[VariableList]
+Target = Data['target_monthly']
+Sign = pd.DataFrame([1]*len(VariableList),index=VariableList)
+# Sign.ix[['PriceMoMRev_Lottery','PriceMoMRev_vol_volume21D','Tech_Realized vol, 1Y',
+#       'Tech_Skewness, 1Y', 'Tech_CAPM_beta, 5Y monthly', 'Tech_CAPM_idosyncratic_vol, 1Y daily',
+#       'Tech_Kurtosis, 1Y', 'Tech_FloatTurnover, 12M', 'Value_PE', 'Value_PS', 'Value_PCF',
+#       'Value_PB']] = -1
+
+Perform = pd.DataFrame(np.random.randn(len(VariableList), 7),index=VariableList,
+                       columns=['HitRate', 'IC', 'SR', 'Turnover', 'Avg Stocks', 'AvgRet L/S','stdRet L/S'])
+PerformMat = pd.DataFrame(np.random.randn(len(VariableList), 7),index=VariableList,
+                       columns=['1','2','3','4','5','All','L/S'])
+NTrain = 120
+LevLimit = 1
+#
+# for Iter in VariableList:
+#   AllVar = pd.DataFrame()
+#   Target = pd.DataFrame()
+#   Price = pd.DataFrame()
+#   for Iter2 in All_Combine.keys():
+#     AllVar[Iter2] = All_Combine[Iter2][Iter]
+#     Target[Iter2] = All_Combine[Iter2]['target_monthly']
+#     Price[Iter2] = All_Combine[Iter2]['Close']
+#     # Target.fillna(0,inplace=True)
+#   Weight = AllVar.ix[0:NTrain,].copy()
+#   IC = AllVar.iloc[0:NTrain,0].copy()
+#   Ret = AllVar.ix[0:NTrain,0:7].copy()
+#   Ret.columns = PerformMat.columns
+#   PnL, HitRate = Ret.copy(), Ret.copy(),
+#   Capital = AllVar.ix[0:NTrain+1,0:7].copy()
+#   Capital.columns = PerformMat.columns
+#   NStock, Turnover = IC.copy(), IC.copy()
+#   Turnover.ix[0,] = 0
+#   Capital.ix[0,] = 100
+#   PriceMatrix = np.zeros((NTrain,7))
+#   for rowID in range(0,NTrain):
+#     # print rowID, Iter
+#     # filter out Target is nan or price is nan (Target may include price as cannot calculate target without price)
+#     clmID = Target.ix[rowID,].notnull()
+#     Index = np.argsort(AllVar.ix[rowID,clmID])
+#     SortIndex = AllVar.ix[rowID,clmID].index[Index]
+#     N = int(len(Index)/5.0)
+#     Weight.ix[rowID,] = 0
+#     for jj in range(0,5):
+#       Weight.ix[rowID,SortIndex[jj*N:(jj+1)*N]] = jj+1
+#     Weight.ix[rowID,SortIndex[5*N:]] = 5
+#     for jj in range(1,6):
+#       PriceMatrix[rowID,jj-1] = np.mean(Target.ix[rowID,Weight.ix[rowID,]==jj])
+#       HitRate.ix[rowID,jj-1] = np.mean(Target.ix[rowID,Weight.ix[rowID,]==jj]>0)
+#     PriceMatrix[rowID,5] = np.mean(PriceMatrix[rowID,0:5])
+#     PriceMatrix[rowID,-1] = PriceMatrix[rowID,4] - PriceMatrix[rowID,0]
+#     HitRate.ix[rowID,-1] = (HitRate.ix[rowID,4] - HitRate.ix[rowID,0] + 1.0)/2.0
+#     # Weight.ix[rowID,] = Weight.ix[rowID,] * Sign.ix[Iter,0]
+#     # Adj = LevLimit*Capital.ix[rowID]/sum(abs(Price.ix[rowID,].fillna(0))*abs(Weight.ix[rowID,]))
+#     # Weight.ix[rowID,] = Weight.ix[rowID,]*Adj
+#     PnL.ix[rowID,] = list(Capital.ix[rowID,]*PriceMatrix[rowID,])
+#     IC.ix[rowID] = np.sqrt(1)*pd.DataFrame({'A' : AllVar.ix[rowID,].values.flatten(),
+#       'B' : Target.ix[rowID,].values.flatten()}).corr(method='spearman').ix[0,1]
+#     Ret.ix[rowID,] = list(PnL.ix[rowID]/Capital.ix[rowID,].values)
+#     Capital.ix[rowID+1,] = Capital.ix[rowID,] + PnL.ix[rowID,]
+#     NStock.ix[rowID,] = len(Index)
+#     if rowID > 0:
+#       clmID = Weight.ix[rowID-1,] == 1
+#       Turnover.ix[rowID,] = sum(Weight.ix[rowID,clmID] != 1)/(sum(clmID)+0.0)
+#   #
+#   # plt.interactive(False)
+#   # plt.plot(PnL.index, cumPnL, 'ro')
+#   # plt.title(Iter)
+#   # plt.show()
+#
+#
+#   # plt.interactive(False)
+#   # plt.plot(PriceMatrix.mean(0), 'ro')
+#   # plt.title(Iter)
+#   # plt.show()
+#
+#   Perform.ix[Iter,'HitRate'] = np.mean(HitRate['L/S'])
+#   Perform.ix[Iter,'Turnover'] = np.mean(Turnover)
+#   Perform.ix[Iter,'IC'] = np.mean(IC)
+#   Perform.ix[Iter,'Avg Stocks'] = np.mean(NStock)
+#   Perform.ix[Iter,'AvgRet L/S'] = np.mean(Ret['L/S'])
+#   Perform.ix[Iter,'stdRet L/S'] = np.std(Ret['L/S'])
+#   Perform.ix[Iter,'SR'] = np.mean(Ret['L/S']) / np.std(Ret['L/S'])
+#   PerformMat.ix[Iter,] = np.mean(PriceMatrix,axis=0)
+#
+# print Perform
+# print PerformMat
+#
+# from pandas import ExcelWriter
+# writer = ExcelWriter('output.xlsx')
+# Perform.to_excel(writer,'Sheet1')
+# PerformMat.to_excel(writer,'Sheet2')
+# writer.save()
+#
+# print 'Finished'
